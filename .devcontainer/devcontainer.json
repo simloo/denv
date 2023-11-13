@@ -1,0 +1,33 @@
+{
+	"name": "Debian",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
+	"remoteEnv": {
+		"EDITOR": "code --wait"
+	},
+	"postCreateCommand": "containerWorkspaceFolder=${containerWorkspaceFolder} ./.devcontainer/postCreateCommand.sh",
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "zsh"
+			},
+			"extensions": [
+				"Upboundio.upbound",
+				"GitHub.copilot",
+				"GitHub.vscode-pull-request-github",
+				"github.vscode-github-actions",
+				"golang.go",
+				"rangav.vscode-thunder-client",
+				"ms-azuretools.vscode-docker",
+				"mhutchie.git-graph",
+				"HashiCorp.terraform",
+				"ms-vscode.makefile-tools"
+			]
+		}
+	},
+	"remoteUser": "vscode"
+}
