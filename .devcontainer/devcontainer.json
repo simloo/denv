@@ -9,7 +9,7 @@
 	"remoteEnv": {
 		"EDITOR": "code --wait"
 	},
-	"postCreateCommand": "containerWorkspaceFolder=${containerWorkspaceFolder} ./.devcontainer/postCreateCommand.sh",
+	"postCreateCommand": "sleep 5; pre-commit install && pre-commit install-hooks",
 	"customizations": {
 		"vscode": {
 			"settings": {

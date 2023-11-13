@@ -27,56 +27,56 @@ ARG K9S_VERSION=v0.27.4
 RUN go install github.com/derailed/k9s@${K9S_VERSION}
 
 FROM build as kubectl
-ARG BUILDOS
-ARG BUILDARCH
+ARG TARGETOS
+ARG TARGETARCH
 ARG KUBECTL_VERSION=v1.28.1
-RUN curl -LO https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/${BUILDOS}/${BUILDARCH}/kubectl && \
+RUN curl -LO https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/${TARGETOS}/${TARGETARCH}/kubectl && \
     chmod +x ./kubectl
 
 FROM build as crossplane
-ARG BUILDOS
-ARG BUILDARCH
+ARG TARGETOS
+ARG TARGETARCH
 ARG CROSSPLANE_VERSION=v1.13.2
-RUN curl -L https://releases.crossplane.io/stable/${CROSSPLANE_VERSION}/bin/${BUILDOS}_${BUILDARCH}/crank -o crossplane && \
+RUN curl -L https://releases.crossplane.io/stable/${CROSSPLANE_VERSION}/bin/${TARGETOS}_${TARGETARCH}/crank -o crossplane && \
     chmod +x crossplane
 
 FROM build as kuttl
-ARG BUILDOS
-ARG BUILDARCH
+ARG TARGETOS
+ARG TARGETARCH
 ARG KUTTL_VERSION=0.15.0
-RUN case "${BUILDARCH}" in \
+RUN case "${TARGETARCH}" in \
     amd64) ARCH="x86_64" ;; \
     arm64) ARCH="arm64" ;; \
-    *) echo "Unsupported architecture: ${BUILDARCH}" && exit 1 ;; \
+    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    curl -L https://github.com/kudobuilder/kuttl/releases/download/v${KUTTL_VERSION}/kubectl-kuttl_${KUTTL_VERSION}_${BUILDOS}_${ARCH} -o kuttl && \
+    curl -L https://github.com/kudobuilder/kuttl/releases/download/v${KUTTL_VERSION}/kubectl-kuttl_${KUTTL_VERSION}_${TARGETOS}_${ARCH} -o kuttl && \
     chmod +x kuttl
 
 FROM build as up
-ARG BUILDOS
-ARG BUILDARCH
+ARG TARGETOS
+ARG TARGETARCH
 ARG UP_VERSION=v0.21.0
-RUN curl -LO https://cli.upbound.io/stable/${UP_VERSION}/bin/${BUILDOS}_${BUILDARCH}/up && \
+RUN curl -LO https://cli.upbound.io/stable/${UP_VERSION}/bin/${TARGETOS}_${TARGETARCH}/up && \
     chmod +x up
 
 FROM build as terraform
-ARG BUILDOS
-ARG BUILDARCH
+ARG TARGETOS
+ARG TARGETARCH
 ARG TERRAFORM_VERSION=1.5.7
-RUN curl -sLO https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${BUILDARCH}.zip && \
-    unzip terraform_${TERRAFORM_VERSION}_linux_${BUILDARCH}.zip
+RUN curl -sLO https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}.zip && \
+    unzip terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}.zip
 
 FROM build as gh
-ARG BUILDOS
-ARG BUILDARCH
+ARG TARGETOS
+ARG TARGETARCH
 ARG GH_VERSION=2.35.0
-RUN curl -sL https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${BUILDARCH}.tar.gz | tar -xz --strip-components=2 gh_${GH_VERSION}_linux_${BUILDARCH}/bin/gh
+RUN curl -sL https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz | tar -xz --strip-components=2 gh_${GH_VERSION}_linux_${TARGETARCH}/bin/gh
 
 FROM build as yq
-ARG BUILDOS
-ARG BUILDARCH
+ARG TARGETOS
+ARG TARGETARCH
 ARG YQ_VERSION=4.35.2
-RUN curl -sL https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${BUILDARCH} -o yq && \
+RUN curl -sL https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${TARGETARCH} -o yq && \
     chmod +x yq
 
 FROM base as packages
@@ -95,8 +95,14 @@ COPY --from=yq /build/yq /usr/local/bin/
 
 
 FROM packages as final
-
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" \
+ARG TARGETOS
+ARG TARGETARCH
+RUN case $TARGETARCH in \
+    amd64) ARCH="x86_64" ;; \
+    arm64) ARCH="aarch64" ;; \
+    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    esac && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" \
     && unzip awscliv2.zip \
-    && ./aws/install \
+    && ./aws/install --update \
     && rm -rf awscliv2.zip ./aws
