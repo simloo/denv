@@ -1,5 +1,10 @@
 FROM mcr.microsoft.com/devcontainers/go:1-1.21-bullseye as base
 
+RUN apt-get update && apt-get install -y \
+    dnsutils && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
+
 FROM base as build
 WORKDIR /build
 
@@ -9,29 +14,42 @@ RUN curl -L https://github.com/pre-commit/pre-commit/releases/download/v${PRE_CO
     chmod +x pre-commit
 
 FROM build as helm
+ARG TARGETARCH
 ARG HELM_VERSION=v3.12.3
-RUN git clone -b ${HELM_VERSION} https://github.com/helm/helm.git && \
-    cd helm && \
-    make
+
+RUN curl -sL https://get.helm.sh/helm-${HELM_VERSION}-linux-${TARGETARCH}.tar.gz | tar -xz --strip-components=1 linux-${TARGETARCH}/helm && \
+    chmod +x helm
 
 FROM build as kind
+ARG TARGETOS
+ARG TARGETARCH
 ARG KIND_VERSION=v0.20.0
-RUN go install sigs.k8s.io/kind@${KIND_VERSION}
+RUN curl -sL https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-${TARGETOS}-${TARGETARCH} -o kind && \
+    chmod +x kind
 
 FROM build as act
-ARG ACT_VERSION=v0.2.50
-RUN go install github.com/nektos/act@${ACT_VERSION}
+ARG TARGETARCH
+ARG ACT_VERSION=v0.2.53
+RUN case $TARGETARCH in \
+    amd64) ARCH="x86_64" ;; \
+    arm64) ARCH="arm64" ;; \
+    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    esac && \
+    curl -sL https://github.com/nektos/act/releases/download/${ACT_VERSION}/act_Linux_${ARCH}.tar.gz | tar -xz act && \
+    chmod +x act
 
 FROM build as k9s
-ARG K9S_VERSION=v0.27.4
-RUN go install github.com/derailed/k9s@${K9S_VERSION}
+ARG TARGETARCH
+ARG K9S_VERSION=v0.28.2
+RUN curl -sL https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_${TARGETARCH}.tar.gz | tar -xz k9s && \
+    chmod +x k9s
 
 FROM build as kubectl
 ARG TARGETOS
 ARG TARGETARCH
 ARG KUBECTL_VERSION=v1.28.1
 RUN curl -LO https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/${TARGETOS}/${TARGETARCH}/kubectl && \
-    chmod +x ./kubectl
+    chmod +x kubectl
 
 FROM build as crossplane
 ARG TARGETOS
@@ -79,12 +97,24 @@ ARG YQ_VERSION=4.35.2
 RUN curl -sL https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${TARGETARCH} -o yq && \
     chmod +x yq
 
+FROM build as awscliv2
+ARG TARGETARCH
+ARG AWSCLI_VERSION=2.13.33
+RUN case $TARGETARCH in \
+    amd64) ARCH=x86_64 ;; \
+    arm64) ARCH=aarch64 ;; \
+    *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac && \
+    curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-${ARCH}-${AWSCLI_VERSION}.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    sudo ./aws/install
+
 FROM base as packages
 COPY --from=pre-commit /build/pre-commit /usr/local/bin/
-COPY --from=helm /build/helm/bin/helm /usr/local/bin/
-COPY --from=kind /go/bin/kind /go/bin/
-COPY --from=act /go/bin/act /go/bin/
-COPY --from=k9s /go/bin/k9s /go/bin/
+COPY --from=helm /build/helm /usr/local/bin/
+COPY --from=kind /build/kind /usr/local/bin/
+COPY --from=act /build/act /usr/local/bin/
+COPY --from=k9s /build/k9s /usr/local/bin/
 COPY --from=kubectl /build/kubectl /usr/local/bin/
 COPY --from=crossplane /build/crossplane /usr/local/bin/kubectl-crossplane
 COPY --from=kuttl /build/kuttl /usr/local/bin/kubectl-kuttl
@@ -92,17 +122,9 @@ COPY --from=up /build/up /usr/local/bin/
 COPY --from=terraform /build/terraform /usr/local/bin/
 COPY --from=gh /build/gh /usr/local/bin/
 COPY --from=yq /build/yq /usr/local/bin/
+COPY --from=awscliv2 /usr/local/aws-cli/ /usr/local/aws-cli/
+
 
 
 FROM packages as final
-ARG TARGETOS
-ARG TARGETARCH
-RUN case $TARGETARCH in \
-    amd64) ARCH="x86_64" ;; \
-    arm64) ARCH="aarch64" ;; \
-    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" \
-    && unzip awscliv2.zip \
-    && ./aws/install --update \
-    && rm -rf awscliv2.zip ./aws
+ENV PATH="/usr/local/aws-cli/v2/current/bin:${PATH}"
