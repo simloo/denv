@@ -27,5 +27,6 @@ jobs:
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: true
         with:
-          imageName: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          imageName: ghcr.io/${{ github.repository }}
+          imageTag: ${{ github.sha }}
           platform: linux/amd64,linux/arm64
